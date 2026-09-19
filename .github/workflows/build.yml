@@ -1,0 +1,41 @@
+name: build-whisper-cli
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout whisper.cpp v1.9.4
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/whisper.cpp
+          ref: v1.9.4
+          submodules: recursive
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
+
+      - name: Build whisper-cli
+        run: cmake --build build --config Release -j --target whisper-cli
+
+      - name: Locate and stage binary
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Recurse -Filter whisper-cli.exe build | Select-Object -First 1
+          if (-not $exe) { throw 'whisper-cli.exe not found' }
+          Copy-Item $exe.FullName whisper-cli-win32-x64.exe
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload v1.9.4 whisper-cli-win32-x64.exe --repo ${{ github.repository }} --clobber
